@@ -10,6 +10,8 @@ public interface ItemService {
    
     List<ItemVO> getAllItems();
 
-	void healthCheck() throws Exception;             
+	void healthCheck() throws Exception;
+
+	void createItem(String name, int quantity);             
 
 }

@@ -37,4 +37,10 @@ public class ItemServiceImpl implements ItemService {
     public void healthCheck() throws Exception {
     	itemBO.healthCheck();
     }
+
+	@Override
+	public void createItem(String name, int quantity) {
+		// TODO Auto-generated method stub
+		
+	}
 }
