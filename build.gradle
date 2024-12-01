@@ -1,0 +1,72 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.1.4'
+    id 'io.spring.dependency-management' version '1.1.4'
+    id 'com.google.cloud.tools.jib' version '3.4.0' // Optional, for containerization
+}
+
+group = 'com.assignment'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    set('springCloudVersion', "2022.0.5")
+}
+
+dependencies {
+    // Spring Boot Core Dependencies
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test' 
+    testImplementation 'org.mockito:mockito-core'
+    testImplementation 'org.mockito:mockito-junit-jupiter'
+
+    // Spring Cloud Config
+    implementation 'org.springframework.cloud:spring-cloud-starter-config'
+
+    // Actuator for monitoring and dynamic refresh
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    // MapStruct for mapping
+    implementation 'org.mapstruct:mapstruct:1.6.3'
+
+    // Lombok for reducing boilerplate code
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    // MapStruct annotation processor
+    annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
+
+    // Database and persistence
+    runtimeOnly 'com.h2database:h2'
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+tasks.withType(JavaCompile) {
+    options.compilerArgs = [
+        '-Amapstruct.defaultComponentModel=spring',
+        '-Amapstruct.unmappedTargetPolicy=IGNORE'
+    ]
+}
+
+// Dependency management for Spring Cloud version alignment
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+    }
+}
