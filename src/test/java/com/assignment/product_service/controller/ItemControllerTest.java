@@ -41,33 +41,30 @@ public class ItemControllerTest {
 	}
 	
 	@Test
-	void testGetAllItems() throws Exception{
-		List<ItemVO> items = List.of(new ItemVO());
-		when(itemService.getAllItems()).thenReturn(items);
-		
-		mockMvc.perform(get("api/items"))
-		.andExpect(status().isOk())
-        .andExpect(jsonPath("$[0].name").value("Test Item"))
-        .andExpect(jsonPath("$[0].quantity").value(10));
-			
+	void testGetAllItems() throws Exception {
+	    List<ItemVO> items = List.of(new ItemVO());
+	    when(itemService.getAllItems()).thenReturn(items);
+
+	    mockMvc.perform(get("/api/items"))  // Add the leading slash here
+	        .andExpect(status().isOk())
+	        .andExpect(jsonPath("$[0].name").value("Test Item"))
+	        .andExpect(jsonPath("$[0].quantity").value(10));
 	}
-	
-	 	@Test
-	    void testCreateItem() throws Exception {
-	      
-	        when(itemService.createItem(any(ItemVO.class))).thenReturn(itemVO);
 
-	        
-	        mockMvc.perform(post("/api/items")
-	                .contentType(MediaType.APPLICATION_JSON) 
-	                .content("{\"name\":\"Test Item\",\"quantity\":10}") 
-	        )
-	                .andExpect(status().isOk()) 
-	                .andExpect(jsonPath("$.name").value("Test Item")) 
-	                .andExpect(jsonPath("$.quantity").value(10));
+	@Test
+	void testCreateItem() throws Exception {
+	    when(itemService.createItem(any(ItemVO.class))).thenReturn(itemVO);
 
-	        
-	        verify(itemService).createItem(any(ItemVO.class));
-	    }
+	    mockMvc.perform(post("/api/items")  // Add the leading slash here
+	            .contentType(MediaType.APPLICATION_JSON)
+	            .content("{\"name\":\"Test Item\",\"quantity\":10}")
+	    )
+	    .andExpect(status().isOk())
+	    .andExpect(jsonPath("$.name").value("Test Item"))
+	    .andExpect(jsonPath("$.quantity").value(10));
+
+	    verify(itemService).createItem(any(ItemVO.class));
+	}
+
 
 }
