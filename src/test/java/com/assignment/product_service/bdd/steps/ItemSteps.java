@@ -9,7 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 public class ItemSteps {
 
     @Autowired
-    private ItemService itemService; // Inject ItemService
+    private ItemService itemService; 
 
     @Given("the item service is running")
     public void theItemServiceIsRunning() {
@@ -18,14 +18,13 @@ public class ItemSteps {
 
     @When("I add a new item with name {string} and quantity {int}")
     public void iAddANewItem(String name, int quantity) {
-        // Call createItem method from your service
+        
         itemService.createItem(name, quantity);
     }
 
     @Then("the item is successfully created")
     public void theItemIsSuccessfullyCreated() {
         System.out.println("Item successfully created.");
-        // You can add an assertion here to check the item is in the repository
     }
 
     @When("I retrieve all items")
@@ -36,6 +35,5 @@ public class ItemSteps {
     @Then("I should see a list of items")
     public void iShouldSeeAListOfItems() {
         System.out.println("List of items retrieved.");
-        // You can add logic to check the list of items retrieved from the database
     }
 }

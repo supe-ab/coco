@@ -23,7 +23,7 @@ public class ItemController {
     private final ItemService itemService;
 
     @PostMapping
-    public ResponseEntity<ItemVO> createItem(@Valid @RequestBody ItemVO itemVO) {
+    public ResponseEntity<ItemVO> createItem(@Valid @RequestBody ItemVO itemVO) throws InterruptedException {
         return ResponseEntity.ok(itemService.createItem(itemVO));
     }
 

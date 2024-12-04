@@ -11,6 +11,7 @@ import com.assignment.product_service.dto.ItemDTO;
 import com.assignment.product_service.mapper.ItemMapper;
 import com.assignment.product_service.vo.ItemVO;
 
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -20,7 +21,9 @@ public class ItemServiceImpl implements ItemService {
     private final ItemBO itemBO;
 
     @Transactional
-    public ItemVO createItem(ItemVO itemVO) {
+    @CircuitBreaker(name = "createItemService", fallbackMethod = "createItemFallback")
+    public ItemVO createItem(ItemVO itemVO) throws InterruptedException {
+    	Thread.sleep(7000);
         ItemDTO itemDTO = itemMapper.voToDTO(itemVO); // VO -> DTO
         ItemDTO createdDTO = itemBO.createItem(itemDTO); // Call BO
         return itemMapper.dtoToVO(createdDTO); // DTO -> VO
@@ -42,5 +45,11 @@ public class ItemServiceImpl implements ItemService {
 	public void createItem(String name, int quantity) {
 		// TODO Auto-generated method stub
 		
+	}
+	
+	private ItemVO createItemFallback(ItemVO itemVO, Throwable throwable) {
+	    
+
+	    return new ItemVO(); // Or implement more sophisticated fallback logic
 	}
 }

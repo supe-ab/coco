@@ -46,7 +46,7 @@ public class ItemServiceImplTest {
 	}
 	
 	@Test
-	void testCreateItem() {
+	void testCreateItem() throws InterruptedException {
 		
 		when(itemMapper.voToDTO(itemVO)).thenReturn(itemDTO);
 		when(itemBO.createItem(itemDTO)).thenReturn(itemDTO);

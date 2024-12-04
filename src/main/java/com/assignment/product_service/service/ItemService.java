@@ -6,7 +6,7 @@ import com.assignment.product_service.vo.ItemVO;
 
 public interface ItemService {
 
-	ItemVO createItem(ItemVO itemVO);      
+	ItemVO createItem(ItemVO itemVO) throws InterruptedException;      
    
     List<ItemVO> getAllItems();
 
