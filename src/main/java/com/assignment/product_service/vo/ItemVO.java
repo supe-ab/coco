@@ -12,6 +12,14 @@ import lombok.Setter;
 public class ItemVO {
     
 
+	public ItemVO(String name2, int quantity2) {
+		// TODO Auto-generated constructor stub
+	}
+
+	public ItemVO() {
+		// TODO Auto-generated constructor stub
+	}
+
 	private Long id;
     
     @NotNull(message = "Name cannot be null")

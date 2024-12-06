@@ -23,7 +23,7 @@ public class ItemServiceImpl implements ItemService {
     @Transactional
     @CircuitBreaker(name = "createItemService", fallbackMethod = "createItemFallback")
     public ItemVO createItem(ItemVO itemVO) throws InterruptedException {
-    	Thread.sleep(7000);
+    	//Thread.sleep(7000);
         ItemDTO itemDTO = itemMapper.voToDTO(itemVO); // VO -> DTO
         ItemDTO createdDTO = itemBO.createItem(itemDTO); // Call BO
         return itemMapper.dtoToVO(createdDTO); // DTO -> VO
@@ -52,4 +52,6 @@ public class ItemServiceImpl implements ItemService {
 
 	    return new ItemVO(); // Or implement more sophisticated fallback logic
 	}
+
+	
 }

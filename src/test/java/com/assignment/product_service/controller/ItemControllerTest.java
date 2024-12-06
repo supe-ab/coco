@@ -42,14 +42,18 @@ public class ItemControllerTest {
 	
 	@Test
 	void testGetAllItems() throws Exception {
-	    List<ItemVO> items = List.of(new ItemVO());
+	    ItemVO mockItem = new ItemVO();
+	    mockItem.setName("Test Item");
+	    mockItem.setQuantity(10);
+	    List<ItemVO> items = List.of(mockItem);
 	    when(itemService.getAllItems()).thenReturn(items);
 
-	    mockMvc.perform(get("/api/items"))  // Add the leading slash here
+	    mockMvc.perform(get("/api/items"))
 	        .andExpect(status().isOk())
 	        .andExpect(jsonPath("$[0].name").value("Test Item"))
 	        .andExpect(jsonPath("$[0].quantity").value(10));
 	}
+
 
 	@Test
 	void testCreateItem() throws Exception {
