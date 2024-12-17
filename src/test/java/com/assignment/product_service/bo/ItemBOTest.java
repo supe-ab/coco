@@ -38,7 +38,7 @@ public class ItemBOTest {
     }
 
     @Test
-    void testCreateItem() {
+    void testCreateItem() throws InterruptedException {
         
         when(itemEO.createItem(itemDTO)).thenReturn(itemDTO);
 

@@ -25,9 +25,11 @@ public class ItemController {
     private final ItemService itemService;
 
     @PostMapping
-    public ResponseEntity<ItemVO> createItem(@Valid @RequestBody ItemVO itemVO) throws InterruptedException {
+    public ResponseEntity<ItemVO> createItem(@RequestBody ItemVO itemVO) throws InterruptedException {
+        System.out.println("Received ItemVO: " + itemVO); // Quick debugging
         return ResponseEntity.ok(itemService.createItem(itemVO));
     }
+
 
     @GetMapping
     public ResponseEntity<List<ItemVO>> getAllItems() {

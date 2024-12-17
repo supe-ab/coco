@@ -33,20 +33,20 @@ public class ItemEO {
 
     public void healthCheck() throws Exception {
         try {
-            
-            itemRepository.findById(0L);  
+            itemRepository.findById(0L);  // Simulating a check on the repository
 
-           
+            // This simulates a successful health check by throwing an exception
             throw new ArithmeticException("HealthCheck passed: Downstream system is healthy");
-
-        } catch (ArithmeticException e) {
             
+        } catch (ArithmeticException e) {
+            // Re-throw the ArithmeticException
             throw new ArithmeticException(e.getMessage()); 
         } catch (Exception e) {
-            
+            // Catch other exceptions and re-throw with custom message
             throw new Exception("HealthCheck failed: " + e.getMessage());
         }
     }
+
 
 
 

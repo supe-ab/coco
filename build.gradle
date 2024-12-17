@@ -1,64 +1,72 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.1.4' // Compatible Spring Boot version
-    id 'io.spring.dependency-management' version '1.1.4'
-    id 'com.google.cloud.tools.jib' version '3.4.0'
+    id 'org.springframework.boot' version '3.3.5'
+    id 'io.spring.dependency-management' version '1.1.6'
+    //id 'com.google.cloud.tools.jib' version '3.4.0'
+    id 'io.gatling.gradle' version '3.13.1'
+    id 'scala'
 }
 
 group = 'com.assignment'
 version = '0.0.1-SNAPSHOT'
 
+// Modern Java toolchain configuration
 java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
-    }
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
 }
 
 repositories {
     mavenCentral()
+    maven { url 'https://repo.spring.io/release' }
+    
 }
 
-ext {
-    set('springCloudVersion', "2022.0.5")
-}
 
-dependencies {
-    // Core dependencies
+
+dependencies {    // Core dependencies
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-	implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.0.2'
-	implementation 'org.springframework.boot:spring-boot-starter-aop'
-    
-
-    // Spring Cloud Config
-    implementation 'org.springframework.cloud:spring-cloud-starter-config'
-
-    // Actuator for monitoring and dynamic refresh
+    implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.0.2'
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
+	
+    // Configuration and Actuator
+    //implementation 'org.springframework.cloud:spring-cloud-starter-config'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
-
-    // MapStruct for mapping
+    
+    // Mapping and Utility Libraries
     implementation 'org.mapstruct:mapstruct:1.6.3'
-
-    // Lombok for reducing boilerplate code
+    implementation 'com.typesafe:config:1.3.1'
+    
+    // Lombok
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
-
-    // MapStruct annotation processor
     annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
-
-    // Database and persistence
+    
+    // Database
     runtimeOnly 'com.h2database:h2'
-
-    // Testing dependencies
-    testImplementation 'org.springframework.boot:spring-boot-starter-test' // JUnit 5 included
-    testImplementation 'org.mockito:mockito-core' // Mockito core
-    testImplementation 'org.mockito:mockito-junit-jupiter' // Mockito with JUnit 5
-
-    // Cucumber dependencies (JUnit 5 + Cucumber 5.x)
+    
+    // Testing Dependencies
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.mockito:mockito-core'
+    testImplementation 'org.mockito:mockito-junit-jupiter'
+    
+    // Cucumber Dependencies
     testImplementation 'io.cucumber:cucumber-java:7.12.1'
     testImplementation 'io.cucumber:cucumber-spring:7.12.1'
     testImplementation 'io.cucumber:cucumber-junit-platform-engine:7.12.1'
+    
+    // Gatling dependencies
+    implementation 'io.gatling:gatling-core:3.13.1'   // Core Gatling library
+    implementation 'io.gatling:gatling-http:3.13.1'   // HTTP module for Gatling
+    implementation 'io.gatling.highcharts:gatling-charts-highcharts:3.13.1'  // Highcharts for Gatling results
+    implementation 'org.scala-lang:scala-library:2.13.15'  // Scala library dependency
+    testImplementation 'org.scala-js:scalajs-test-bridge_2.13:1.17.0'
+    implementation  'com.typesafe:config:1.3.1'
+    
+   
 }
 
 configurations {
@@ -67,6 +75,7 @@ configurations {
     }
 }
 
+// MapStruct Configuration
 tasks.withType(JavaCompile) {
     options.compilerArgs = [
         '-Amapstruct.defaultComponentModel=spring',
@@ -74,13 +83,15 @@ tasks.withType(JavaCompile) {
     ]
 }
 
-// Dependency management for Spring Cloud version alignment
-dependencyManagement {
-    imports {
-        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
-    }
-}
+// Spring Cloud Dependency Management
+//dependencyManagement {
+    //imports {
+      //  mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+    //}
+//}
 
-tasks.named('test') {
-    useJUnitPlatform() // Ensure JUnit 5 is used for testing
+
+// Testing Configuration
+test {
+    useJUnitPlatform()
 }
