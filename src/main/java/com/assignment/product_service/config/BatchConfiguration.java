@@ -2,6 +2,8 @@ package com.assignment.product_service.config;
 
 import com.assignment.product_service.vo.ItemVO;
 import jakarta.persistence.EntityManagerFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.batch.core.*;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
@@ -28,11 +30,13 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 import javax.sql.DataSource;
 import java.io.File;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
 @Configuration
 public class BatchConfiguration {
+    private static final Logger logger = LoggerFactory.getLogger(BatchConfiguration.class);
 
     // ---------- Import CSV to DB (Chunk-based) ----------
     @Bean
@@ -42,8 +46,8 @@ public class BatchConfiguration {
                 .name("itemReader")
                 .resource(new ClassPathResource("items.csv"))
                 .delimited()
-                .names("name", "quantity")
-                .linesToSkip(1)
+                .names("id", "name", "quantity")
+                .linesToSkip(1) // Skip header row
                 .fieldSetMapper(new BeanWrapperFieldSetMapper<>() {{
                     setTargetType(ItemVO.class);
                 }})
@@ -53,7 +57,10 @@ public class BatchConfiguration {
     @Bean
     public ItemProcessor<ItemVO, ItemVO> csvItemProcessor() {
         return item -> {
-            item.setName(item.getName().toUpperCase());
+            logger.info("Processing item: {}", item);
+            // Remove ID to let DB generate it
+            item.setId(null);
+            item.setName(item.getName().trim().toUpperCase());
             if (item.getQuantity() < 0) {
                 item.setQuantity(0);
             }
@@ -80,6 +87,21 @@ public class BatchConfiguration {
                 .reader(reader)
                 .processor(processor)
                 .writer(writer)
+                .faultTolerant()
+                .skip(Exception.class)
+                .skipLimit(10)
+                .listener(new StepExecutionListener() {
+                    @Override
+                    public void beforeStep(StepExecution stepExecution) {
+                        logger.info("Starting CSV import step");
+                    }
+                    
+                    @Override
+                    public ExitStatus afterStep(StepExecution stepExecution) {
+                        logger.info("Finished CSV import step. Status: {}", stepExecution.getStatus());
+                        return stepExecution.getExitStatus();
+                    }
+                })
                 .build();
     }
 
@@ -89,6 +111,17 @@ public class BatchConfiguration {
                                @Qualifier("csvImportStep") Step csvImportStep) {
         return new JobBuilder("importCsvToDbJob", jobRepository)
                 .start(csvImportStep)
+                .listener(new JobExecutionListener() {
+                    @Override
+                    public void beforeJob(JobExecution jobExecution) {
+                        logger.info("Starting CSV import job");
+                    }
+                    
+                    @Override
+                    public void afterJob(JobExecution jobExecution) {
+                        logger.info("Finished CSV import job. Status: {}", jobExecution.getStatus());
+                    }
+                })
                 .build();
     }
 
@@ -115,6 +148,7 @@ public class BatchConfiguration {
                 .delimited()
                 .delimiter(",")
                 .names("id", "name", "quantity")
+                .headerCallback(writer -> writer.write("id,name,quantity"))
                 .build();
     }
 
@@ -147,17 +181,32 @@ public class BatchConfiguration {
         return (contribution, chunkContext) -> {
             List<ItemVO> items = new ArrayList<>();
             ItemVO item;
-            reader.open(contribution.getStepExecution().getExecutionContext());
-            
-            while ((item = reader.read()) != null) {
-                items.add(item);
+
+            try {
+                reader.open(contribution.getStepExecution().getExecutionContext());
+                while ((item = reader.read()) != null) {
+                    logger.info("Read item from CSV: {}", item);
+                    items.add(item);
+                }
+            } catch (Exception e) {
+                logger.error("Error reading from CSV: ", e);
+                throw e;
+            } finally {
+                reader.close();
             }
-            
-            reader.close();
-            
-            ExecutionContext stepExecutionContext = contribution.getStepExecution().getExecutionContext();
-            stepExecutionContext.put("items", items);
-            
+
+            if (items.isEmpty()) {
+                logger.warn("No items read from CSV file");
+                throw new IllegalStateException("No items read from CSV file");
+            } else {
+                logger.info("Read {} items from CSV file", items.size());
+            }
+
+            // Store directly in JobExecutionContext
+            ExecutionContext jobExecutionContext = contribution.getStepExecution()
+                .getJobExecution().getExecutionContext();
+            jobExecutionContext.put("items", (Serializable) items);
+
             return RepeatStatus.FINISHED;
         };
     }
@@ -166,22 +215,33 @@ public class BatchConfiguration {
     @Qualifier("processorTasklet")
     public Tasklet processorTasklet() {
         return (contribution, chunkContext) -> {
-            ExecutionContext stepExecutionContext = contribution.getStepExecution().getExecutionContext();
-            ExecutionContext jobExecutionContext = contribution.getStepExecution().getJobExecution().getExecutionContext();
-            
+            ExecutionContext jobExecutionContext = contribution.getStepExecution()
+                .getJobExecution().getExecutionContext();
+
             @SuppressWarnings("unchecked")
-            List<ItemVO> items = (List<ItemVO>) stepExecutionContext.get("items");
-            
+            List<ItemVO> items = (List<ItemVO>) jobExecutionContext.get("items");
+
+            if (items == null || items.isEmpty()) {
+                logger.error("No items found in job execution context");
+                throw new IllegalStateException("No items to process");
+            }
+
             List<ItemVO> processedItems = new ArrayList<>();
             for (ItemVO item : items) {
-                item.setName(item.getName().toUpperCase());
+                // Remove ID to let DB generate it
+                item.setId(null);
+                item.setName(item.getName().trim().toUpperCase());
                 if (item.getQuantity() < 0) {
                     item.setQuantity(0);
                 }
                 processedItems.add(item);
+                logger.info("Processed item: {}", item);
             }
-            
-            jobExecutionContext.put("processedItems", processedItems);
+
+            // Store processed items directly
+            jobExecutionContext.put("processedItems", (Serializable) processedItems);
+            logger.info("Processed {} items", processedItems.size());
+
             return RepeatStatus.FINISHED;
         };
     }
@@ -190,26 +250,42 @@ public class BatchConfiguration {
     @Qualifier("writerTasklet")
     public Tasklet writerTasklet(EntityManagerFactory entityManagerFactory) {
         return (contribution, chunkContext) -> {
-            ExecutionContext jobExecutionContext = contribution.getStepExecution().getJobExecution().getExecutionContext();
-            
+            ExecutionContext jobExecutionContext = contribution.getStepExecution()
+                .getJobExecution().getExecutionContext();
+
             @SuppressWarnings("unchecked")
             List<ItemVO> items = (List<ItemVO>) jobExecutionContext.get("processedItems");
-            
+
+            if (items == null || items.isEmpty()) {
+                logger.error("No items found in job execution context");
+                throw new IllegalStateException("No items to write");
+            }
+
+            // Write each item as a separate entity
             JpaItemWriter<ItemVO> writer = new JpaItemWriter<>();
             writer.setEntityManagerFactory(entityManagerFactory);
             writer.afterPropertiesSet();
-            
-            writer.write((Chunk<? extends ItemVO>) Chunk.of(items));
-            
+
+            try {
+                for (ItemVO item : items) {
+                    writer.write(Chunk.of(item)); // Write each entity individually
+                    logger.info("Written item to database: {}", item);
+                }
+            } catch (Exception e) {
+                logger.error("Error writing to database: ", e);
+                throw e;
+            }
+
             return RepeatStatus.FINISHED;
         };
     }
 
+
     @Bean
     @Qualifier("taskletReaderStep")
     public Step taskletReaderStep(JobRepository jobRepository,
-                                PlatformTransactionManager transactionManager,
-                                @Qualifier("readerTasklet") Tasklet readerTasklet) {
+                                  PlatformTransactionManager transactionManager,
+                                  @Qualifier("readerTasklet") Tasklet readerTasklet) {
         return new StepBuilder("taskletReaderStep", jobRepository)
                 .tasklet(readerTasklet, transactionManager)
                 .build();
@@ -218,8 +294,8 @@ public class BatchConfiguration {
     @Bean
     @Qualifier("taskletProcessorStep")
     public Step taskletProcessorStep(JobRepository jobRepository,
-                                   PlatformTransactionManager transactionManager,
-                                   @Qualifier("processorTasklet") Tasklet processorTasklet) {
+                                     PlatformTransactionManager transactionManager,
+                                     @Qualifier("processorTasklet") Tasklet processorTasklet) {
         return new StepBuilder("taskletProcessorStep", jobRepository)
                 .tasklet(processorTasklet, transactionManager)
                 .build();
@@ -228,8 +304,8 @@ public class BatchConfiguration {
     @Bean
     @Qualifier("taskletWriterStep")
     public Step taskletWriterStep(JobRepository jobRepository,
-                                PlatformTransactionManager transactionManager,
-                                @Qualifier("writerTasklet") Tasklet writerTasklet) {
+                                  PlatformTransactionManager transactionManager,
+                                  @Qualifier("writerTasklet") Tasklet writerTasklet) {
         return new StepBuilder("taskletWriterStep", jobRepository)
                 .tasklet(writerTasklet, transactionManager)
                 .build();
@@ -238,17 +314,29 @@ public class BatchConfiguration {
     @Bean
     @Qualifier("taskletBasedJob")
     public Job taskletBasedJob(JobRepository jobRepository,
-                              @Qualifier("taskletReaderStep") Step taskletReaderStep,
-                              @Qualifier("taskletProcessorStep") Step taskletProcessorStep,
-                              @Qualifier("taskletWriterStep") Step taskletWriterStep) {
+                               @Qualifier("taskletReaderStep") Step taskletReaderStep,
+                               @Qualifier("taskletProcessorStep") Step taskletProcessorStep,
+                               @Qualifier("taskletWriterStep") Step taskletWriterStep) {
         return new JobBuilder("taskletBasedJob", jobRepository)
                 .start(taskletReaderStep)
                 .next(taskletProcessorStep)
                 .next(taskletWriterStep)
+                .listener(new JobExecutionListener() {
+                    @Override
+                    public void beforeJob(JobExecution jobExecution) {
+                        logger.info("Starting tasklet-based import job");
+                    }
+
+                    @Override
+                    public void afterJob(JobExecution jobExecution) {
+                        logger.info("Finished tasklet-based import job. Status: {}", jobExecution.getStatus());
+                    }
+                })
                 .build();
     }
 
-    // ---------- Export DB to CSV (Tasklet-based) ----------
+
+ // ---------- Export DB to CSV (Tasklet-based) ----------
     @Bean
     @Qualifier("dbReaderTasklet")
     public Tasklet dbReaderTasklet(DataSource dataSource) {
@@ -259,15 +347,30 @@ public class BatchConfiguration {
             reader.setSql("SELECT id, name, quantity FROM item");
             reader.setRowMapper(new BeanPropertyRowMapper<>(ItemVO.class));
             
-            reader.open(contribution.getStepExecution().getExecutionContext());
-            ItemVO item;
-            while ((item = reader.read()) != null) {
-                items.add(item);
-            }
-            reader.close();
+            // Initialize the reader
+            reader.afterPropertiesSet();
             
-            ExecutionContext stepExecutionContext = contribution.getStepExecution().getExecutionContext();
-            stepExecutionContext.put("items", items);
+            ExecutionContext executionContext = contribution.getStepExecution().getExecutionContext();
+            reader.open(executionContext);
+            
+            try {
+                ItemVO item;
+                while ((item = reader.read()) != null) {
+                    items.add(item);
+                }
+                
+                contribution.getStepExecution().getJobExecution()
+                    .getExecutionContext()
+                    .put("items", items);
+                
+                // Add logging
+                if (items.isEmpty()) {
+                    throw new IllegalStateException("No items found in database");
+                }
+                
+            } finally {
+                reader.close();
+            }
             
             return RepeatStatus.FINISHED;
         };
@@ -277,10 +380,17 @@ public class BatchConfiguration {
     @Qualifier("csvWriterTasklet")
     public Tasklet csvWriterTasklet() {
         return (contribution, chunkContext) -> {
-            ExecutionContext stepExecutionContext = contribution.getStepExecution().getExecutionContext();
+            // Get items from job execution context instead of step execution context
+            ExecutionContext jobContext = contribution.getStepExecution()
+                .getJobExecution()
+                .getExecutionContext();
             
             @SuppressWarnings("unchecked")
-            List<ItemVO> items = (List<ItemVO>) stepExecutionContext.get("items");
+            List<ItemVO> items = (List<ItemVO>) jobContext.get("items");
+            
+            if (items == null || items.isEmpty()) {
+                throw new IllegalStateException("No items available for writing to CSV");
+            }
             
             File outputDirectory = new File("./batch-output");
             if (!outputDirectory.exists()) {
@@ -293,16 +403,24 @@ public class BatchConfiguration {
                     .delimited()
                     .delimiter(",")
                     .names("id", "name", "quantity")
+                    .headerCallback(headerWriter -> headerWriter.write("id,name,quantity"))
+                    .shouldDeleteIfExists(true)
                     .build();
 
+            writer.afterPropertiesSet();
             writer.open(contribution.getStepExecution().getExecutionContext());
-            writer.write((Chunk<? extends ItemVO>) Chunk.of(items));
-            writer.close();
+            
+            try {
+                for (ItemVO item : items) {
+                    writer.write(Chunk.of(item));
+                }
+            } finally {
+                writer.close();
+            }
             
             return RepeatStatus.FINISHED;
         };
     }
-
     @Bean
     @Qualifier("taskletDbReaderStep")
     public Step taskletDbReaderStep(JobRepository jobRepository,
@@ -333,4 +451,5 @@ public class BatchConfiguration {
                 .next(taskletCsvWriterStep)
                 .build();
     }
+
 }
